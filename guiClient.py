@@ -68,6 +68,8 @@ class WebSocketThread(Thread):
         if self.websocket:
             await self.websocket.send(message)
 
+
+### Main Application Window ###
 class StarFinderGUI(QMainWindow):
     def __init__(self, stars):
         
