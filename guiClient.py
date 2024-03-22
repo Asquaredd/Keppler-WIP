@@ -13,7 +13,11 @@ import websockets
 from skyfield.api import load, Topos
 from skyfield.data import hipparcos
 from functools import partial
-
+from classes.vidServer import vidServer
+from classes.messageServer import sendCommand
+from classes.receiveMsg import receiveMessage
+import threading
+import time
 
 
 
@@ -45,28 +49,7 @@ constellation_presets = {
 
 
 #### Websocket Client ####
-class WebSocketThread(Thread):
-    def __init__(self, uri, on_message_callback):
-        super().__init__()
-        self.uri = uri
-        self.on_message_callback = on_message_callback
-        self.websocket = None
 
-    def run(self):
-        asyncio.set_event_loop(asyncio.new_event_loop())
-        self.loop = asyncio.get_event_loop()
-        self.loop.run_until_complete(self.listen())
-
-    async def listen(self):
-        async with websockets.connect(self.uri) as websocket:
-            self.websocket = websocket
-            while True:
-                message = await websocket.recv()
-                self.on_message_callback(f"Received: {message}")
-
-    async def send_message(self, message):
-        if self.websocket:
-            await self.websocket.send(message)
 
 
 ### Main Application Window ###
@@ -206,7 +189,7 @@ class StarFinderGUI(QMainWindow):
         self.server_ip, ok = QInputDialog.getText(self, 'WebSocket Server IP', 'Enter WebSocket server IP:')
         if ok and self.server_ip:
             self.initUI()
-            self.start_websocket_client(f"ws://{self.server_ip}")
+            self.start_websocket_client(self.server_ip)
         else:
             sys.exit()
         
@@ -436,14 +419,27 @@ class StarFinderGUI(QMainWindow):
     
     ### Websocket Client Console ###
     def start_websocket_client(self, uri):
-        self.websocket_thread = WebSocketThread(uri, self.log_to_console)
-        self.websocket_thread.start()
+        self.commandServer_thread = sendCommand(uri, 65432) # Keep the ports static for easier use
+        self.videoServer = vidServer(6789)
+        self.updateConsole = threading.Thread(target=self.log_to_console,args=(51000,)) # 51000 is the port
+        self.updateConsole.daemon = True
+        self.updateConsole.start()
+
+
     def send_message_to_server(self):
         message = self.userMessageInput.text()
-        asyncio.run_coroutine_threadsafe(self.websocket_thread.send_message(message), self.websocket_thread.loop)
+        self.commandServer_thread.sendMsg(message)
         self.userMessageInput.clear()
-    def log_to_console(self, message):
-        self.console.append(message)
+    
+    
+    
+    def log_to_console(self, port):
+        self.receiveMessageThread = receiveMessage('', port)
+        while(1):
+            message = self.receiveMessageThread.getMessage()
+            if message is not None:
+                self.console.append(message)
+            time.sleep(3)
 
     
     
