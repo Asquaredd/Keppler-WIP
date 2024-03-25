@@ -7,6 +7,8 @@ import sys
 from PySide6.QtWidgets import (QApplication, QMainWindow,QDialog, QFileDialog, QTabWidget, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QInputDialog, QHBoxLayout, QTextEdit)
 from PySide6.QtGui import QAction, QFont, QIcon, QPixmap
 from PySide6.QtCore import Qt
+from PyQt6.QtCore import QTimer
+from PyQt6.QtGui import QImage, QPixmap
 from threading import Thread
 import asyncio
 import websockets
@@ -16,6 +18,7 @@ from functools import partial
 from classes.vidServer import vidServer
 from classes.messageServer import sendCommand
 from classes.receiveMsg import receiveMessage
+import cv2
 import threading
 import time
 
@@ -284,8 +287,15 @@ class StarFinderGUI(QMainWindow):
 
     def tab1UI(self):
         layout = QVBoxLayout(self.tab1)
-        label = QLabel("LIVE CAMERA VIEW WILL GO HERE")
-        layout.addWidget(label)
+        self.videoStreamLabel = QLabel("LIVE CAMERA VIEW WILL GO HERE")
+
+        # Set up a QTimer to update the image
+        self.timer = QTimer()
+        self.timer.setInterval(10)  # Update interval in milliseconds
+        self.timer.timeout.connect(self.update_image)
+        self.timer.start()
+
+        layout.addWidget(self.videoStreamLabel)
 
     def tab2UI(self):
         layout = QVBoxLayout(self.tab2)
@@ -376,6 +386,19 @@ class StarFinderGUI(QMainWindow):
         star_view_mode_action.triggered.connect(self.toggleStarViewMode)
         view_menu.addAction(star_view_mode_action)
 
+    def update_image(self):
+        # Get a new image from the vidServer
+        img = self.videoServer.getImg()
+        if img is not None:
+            # Convert the NumPy array to QImage
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            height, width, channels = img.shape
+            bytes_per_line = channels * width
+            q_image = QImage(img.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
+
+            # Convert QImage to QPixmap and display it
+            pixmap = QPixmap.fromImage(q_image)
+            self.videoStreamLabel.setPixmap(pixmap)
 
     def captureImage(self):
         image = self.get_current_video_frame()  # Replace with actual frame capture code

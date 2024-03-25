@@ -31,7 +31,7 @@ class vidServer():
             return item
         # Stalk image to prevent the crash of lack of data
         elif elapsedWaitTime > 3:
-            image = cv2.imread('cat.png')
+            image = cv2.imread('imgs/disconnected.png')
             return image
         return None
     
