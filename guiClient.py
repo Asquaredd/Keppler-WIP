@@ -7,13 +7,20 @@ import sys
 from PySide6.QtWidgets import (QApplication, QMainWindow,QDialog, QFileDialog, QTabWidget, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QInputDialog, QHBoxLayout, QTextEdit)
 from PySide6.QtGui import QAction, QFont, QIcon, QPixmap
 from PySide6.QtCore import Qt
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QImage, QPixmap
 from threading import Thread
 import asyncio
 import websockets
 from skyfield.api import load, Topos
 from skyfield.data import hipparcos
 from functools import partial
-
+from classes.vidServer import vidServer
+from classes.messageServer import sendCommand
+from classes.receiveMsg import receiveMessage
+import cv2
+import threading
+import time
 
 
 
@@ -45,28 +52,7 @@ constellation_presets = {
 
 
 #### Websocket Client ####
-class WebSocketThread(Thread):
-    def __init__(self, uri, on_message_callback):
-        super().__init__()
-        self.uri = uri
-        self.on_message_callback = on_message_callback
-        self.websocket = None
 
-    def run(self):
-        asyncio.set_event_loop(asyncio.new_event_loop())
-        self.loop = asyncio.get_event_loop()
-        self.loop.run_until_complete(self.listen())
-
-    async def listen(self):
-        async with websockets.connect(self.uri) as websocket:
-            self.websocket = websocket
-            while True:
-                message = await websocket.recv()
-                self.on_message_callback(f"Received: {message}")
-
-    async def send_message(self, message):
-        if self.websocket:
-            await self.websocket.send(message)
 
 
 ### Main Application Window ###
@@ -206,7 +192,7 @@ class StarFinderGUI(QMainWindow):
         self.server_ip, ok = QInputDialog.getText(self, 'WebSocket Server IP', 'Enter WebSocket server IP:')
         if ok and self.server_ip:
             self.initUI()
-            self.start_websocket_client(f"ws://{self.server_ip}")
+            self.start_websocket_client(self.server_ip)
         else:
             sys.exit()
         
@@ -298,11 +284,20 @@ class StarFinderGUI(QMainWindow):
         ### Add panel layout to main layout ###
         main_layout.addLayout(right_panel)
 
+    #def initTelescope
+    def initTelescopeCam(self):
+        self.videoStreamLabel = QLabel("LIVE CAMERA VIEW WILL GO HERE")
+
+        # Set up a QTimer to update the image
+        self.timer = QTimer()
+        self.timer.setInterval(10)  # Update interval in milliseconds
+        self.timer.timeout.connect(self.update_image)
+        self.timer.start()
 
     def tab1UI(self):
         layout = QVBoxLayout(self.tab1)
-        label = QLabel("LIVE CAMERA VIEW WILL GO HERE")
-        layout.addWidget(label)
+        self.initTelescopeCam()
+        layout.addWidget(self.videoStreamLabel)
 
     def tab2UI(self):
         layout = QVBoxLayout(self.tab2)
@@ -393,6 +388,19 @@ class StarFinderGUI(QMainWindow):
         star_view_mode_action.triggered.connect(self.toggleStarViewMode)
         view_menu.addAction(star_view_mode_action)
 
+    def update_image(self):
+        # Get a new image from the vidServer
+        img = self.videoServer.getImg()
+        if img is not None:
+            # Convert the NumPy array to QImage
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            height, width, channels = img.shape
+            bytes_per_line = channels * width
+            q_image = QImage(img.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
+
+            # Convert QImage to QPixmap and display it
+            pixmap = QPixmap.fromImage(q_image)
+            self.videoStreamLabel.setPixmap(pixmap)
 
     def captureImage(self):
         image = self.get_current_video_frame()  # Replace with actual frame capture code
@@ -436,14 +444,27 @@ class StarFinderGUI(QMainWindow):
     
     ### Websocket Client Console ###
     def start_websocket_client(self, uri):
-        self.websocket_thread = WebSocketThread(uri, self.log_to_console)
-        self.websocket_thread.start()
+        self.commandServer_thread = sendCommand(uri, 65432) # Keep the ports static for easier use
+        self.videoServer = vidServer(6789)
+        self.updateConsole = threading.Thread(target=self.log_to_console,args=(51000,)) # 51000 is the port
+        self.updateConsole.daemon = True
+        self.updateConsole.start()
+
+
     def send_message_to_server(self):
         message = self.userMessageInput.text()
-        asyncio.run_coroutine_threadsafe(self.websocket_thread.send_message(message), self.websocket_thread.loop)
+        self.commandServer_thread.sendMsg(message)
         self.userMessageInput.clear()
-    def log_to_console(self, message):
-        self.console.append(message)
+    
+    
+    
+    def log_to_console(self, port):
+        self.receiveMessageThread = receiveMessage('', port)
+        while(1):
+            message = self.receiveMessageThread.getMessage()
+            if message is not None:
+                self.console.append(message)
+            time.sleep(3)
 
     
     
