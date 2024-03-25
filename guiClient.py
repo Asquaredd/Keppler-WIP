@@ -7,8 +7,8 @@ import sys
 from PySide6.QtWidgets import (QApplication, QMainWindow,QDialog, QFileDialog, QTabWidget, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QInputDialog, QHBoxLayout, QTextEdit)
 from PySide6.QtGui import QAction, QFont, QIcon, QPixmap
 from PySide6.QtCore import Qt
-from PyQt6.QtCore import QTimer
-from PyQt6.QtGui import QImage, QPixmap
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QImage, QPixmap
 from threading import Thread
 import asyncio
 import websockets
@@ -284,9 +284,8 @@ class StarFinderGUI(QMainWindow):
         ### Add panel layout to main layout ###
         main_layout.addLayout(right_panel)
 
-
-    def tab1UI(self):
-        layout = QVBoxLayout(self.tab1)
+    #def initTelescope
+    def initTelescopeCam(self):
         self.videoStreamLabel = QLabel("LIVE CAMERA VIEW WILL GO HERE")
 
         # Set up a QTimer to update the image
@@ -295,6 +294,9 @@ class StarFinderGUI(QMainWindow):
         self.timer.timeout.connect(self.update_image)
         self.timer.start()
 
+    def tab1UI(self):
+        layout = QVBoxLayout(self.tab1)
+        self.initTelescopeCam()
         layout.addWidget(self.videoStreamLabel)
 
     def tab2UI(self):
